@@ -34,7 +34,7 @@ def _find_files_for_subject(subject_dir: str, subject_id: str) -> Dict[str, str]
     for path in nii_files:
         lower = os.path.basename(path).lower()
         for mod in MODALITIES:
-            if re.search(rf"_{mod}(\\.|_)", lower):
+            if re.search(rf"(_|-){mod}(\\.|_|-)", lower):
                 mapping[mod] = path
         if "seg" in lower or "label" in lower:
             mapping["seg"] = path
@@ -76,7 +76,7 @@ def _resolve_roots(root: str) -> Tuple[str, str]:
 
 
 def _subject_dirs(root: str) -> Dict[str, str]:
-    dirs = {}
+    dirs: Dict[str, str] = {}
     for split in ["Training", "Validation", "Test"]:
         split_dir = os.path.join(root, split)
         if not os.path.isdir(split_dir):
@@ -85,7 +85,42 @@ def _subject_dirs(root: str) -> Dict[str, str]:
             path = os.path.join(split_dir, name)
             if os.path.isdir(path) and name.startswith("BraTS-PED"):
                 dirs[name] = path
+    if dirs:
+        return dirs
+
+    # Fallback: discover by walking files and inferring subject id
+    sid_re = re.compile(r"(BraTS-PED-\\d+-\\d+)", re.IGNORECASE)
+    for dirpath, _, filenames in os.walk(root):
+        base = os.path.basename(dirpath)
+        m = sid_re.search(base)
+        if m:
+            dirs[m.group(1)] = dirpath
+            continue
+        for fname in filenames:
+            if not (fname.endswith(".nii") or fname.endswith(".nii.gz") or fname.endswith(".zip")):
+                continue
+            m = sid_re.search(fname)
+            if m:
+                dirs[m.group(1)] = dirpath
     return dirs
+
+
+def _auto_unzip(root: str) -> None:
+    import zipfile
+
+    for dirpath, _, filenames in os.walk(root):
+        for name in filenames:
+            if not name.endswith(".zip"):
+                continue
+            zpath = os.path.join(dirpath, name)
+            out_dir = os.path.splitext(zpath)[0]
+            if os.path.exists(out_dir):
+                continue
+            try:
+                with zipfile.ZipFile(zpath, "r") as zf:
+                    zf.extractall(out_dir)
+            except zipfile.BadZipFile:
+                continue
 
 
 def build_subjects(root: str) -> Tuple[List[Dict], Dict[str, List[Dict]]]:
@@ -93,6 +128,9 @@ def build_subjects(root: str) -> Tuple[List[Dict], Dict[str, List[Dict]]]:
     meta_path = os.path.join(meta_root, "BraTS-PEDs_metadata.tsv")
     df = pd.read_csv(meta_path, sep="\\t", engine="python")
     subject_dirs = _subject_dirs(data_root)
+    if not subject_dirs:
+        _auto_unzip(data_root)
+        subject_dirs = _subject_dirs(data_root)
 
     subjects = []
     for _, row in df.iterrows():
