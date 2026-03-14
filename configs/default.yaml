@@ -1,0 +1,35 @@
+run:
+  name: effu_default
+  output_dir: outputs
+  seed: 42
+
+data:
+  root: /content/drive/MyDrive/Brats
+  batch_size: 1
+  num_workers: 2
+  patch_size: [128, 128, 128]
+  spacing: [1.0, 1.0, 1.0]
+  use_metadata: true
+
+model:
+  in_modalities: 4
+  base_channels: 32
+  edge_enabled: true
+  freq_enabled: true
+  modality_attention: true
+  film_metadata: true
+
+train:
+  epochs: 50
+  lr: 1.0e-4
+  weight_decay: 1.0e-5
+  val_interval: 1
+  amp: true
+  save_best: true
+
+loss:
+  dice_weight: 0.7
+  ce_weight: 0.3
+
+eval:
+  threshold: 0.5

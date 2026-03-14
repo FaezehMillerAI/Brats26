@@ -1,0 +1,12 @@
+numpy
+pandas
+pyyaml
+scikit-learn
+scikit-image
+nibabel
+torch
+monai
+matplotlib
+seaborn
+plotly
+tqdm

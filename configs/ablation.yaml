@@ -1,0 +1,31 @@
+base_config: configs/default.yaml
+variants:
+  - name: baseline_unet
+    model:
+      edge_enabled: false
+      freq_enabled: false
+      modality_attention: false
+      film_metadata: false
+  - name: edge_only
+    model:
+      edge_enabled: true
+      freq_enabled: false
+  - name: freq_only
+    model:
+      edge_enabled: false
+      freq_enabled: true
+  - name: edge_freq
+    model:
+      edge_enabled: true
+      freq_enabled: true
+  - name: edge_freq_modatt
+    model:
+      edge_enabled: true
+      freq_enabled: true
+      modality_attention: true
+  - name: edge_freq_modatt_film
+    model:
+      edge_enabled: true
+      freq_enabled: true
+      modality_attention: true
+      film_metadata: true
