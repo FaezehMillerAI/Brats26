@@ -53,17 +53,26 @@ def _meta_vector(row: pd.Series) -> np.ndarray:
     return np.array([age, sex_val], dtype=np.float32)
 
 
-def _resolve_root(root: str) -> str:
-    # Handle layouts with "PKG - BraTS-PEDs-v1/BraTS-PEDs-v1"
-    candidates = [
-        root,
-        os.path.join(root, "PKG - BraTS-PEDs-v1", "BraTS-PEDs-v1"),
-        os.path.join(root, "BraTS-PEDs-v1"),
-    ]
-    for c in candidates:
+def _resolve_roots(root: str) -> Tuple[str, str]:
+    # meta_root may differ from data_root in some releases
+    pkg_root = os.path.join(root, "PKG - BraTS-PEDs-v1", "BraTS-PEDs-v1")
+    alt_root = os.path.join(root, "BraTS-PEDs-v1")
+
+    meta_root = root
+    data_root = root
+
+    if os.path.exists(os.path.join(root, "BraTS-PEDs_metadata.tsv")):
+        if os.path.isdir(pkg_root):
+            data_root = pkg_root
+        elif os.path.isdir(alt_root):
+            data_root = alt_root
+        return meta_root, data_root
+
+    for c in [pkg_root, alt_root, root]:
         if os.path.exists(os.path.join(c, "BraTS-PEDs_metadata.tsv")):
-            return c
-    return root
+            return c, c
+
+    return root, root
 
 
 def _subject_dirs(root: str) -> Dict[str, str]:
@@ -80,10 +89,10 @@ def _subject_dirs(root: str) -> Dict[str, str]:
 
 
 def build_subjects(root: str) -> Tuple[List[Dict], Dict[str, List[Dict]]]:
-    root = _resolve_root(root)
-    meta_path = os.path.join(root, "BraTS-PEDs_metadata.tsv")
+    meta_root, data_root = _resolve_roots(root)
+    meta_path = os.path.join(meta_root, "BraTS-PEDs_metadata.tsv")
     df = pd.read_csv(meta_path, sep="\\t", engine="python")
-    subject_dirs = _subject_dirs(root)
+    subject_dirs = _subject_dirs(data_root)
 
     subjects = []
     for _, row in df.iterrows():
