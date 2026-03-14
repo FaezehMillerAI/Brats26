@@ -25,11 +25,10 @@ from monai.transforms import (
 MODALITIES = ["t1n", "t1c", "t2w", "t2f"]
 
 
-def _find_files_for_subject(root: str, subject_id: str) -> Dict[str, str]:
-    subject_dir = os.path.join(root, subject_id)
-    nii_files = glob.glob(os.path.join(subject_dir, "*.nii*"))
+def _find_files_for_subject(subject_dir: str, subject_id: str) -> Dict[str, str]:
+    nii_files = glob.glob(os.path.join(subject_dir, "**", "*.nii*"), recursive=True)
     if not nii_files:
-        nii_files = glob.glob(os.path.join(root, f"{subject_id}*.nii*"))
+        nii_files = glob.glob(os.path.join(os.path.dirname(subject_dir), f"{subject_id}*.nii*"))
 
     mapping = {}
     for path in nii_files:
@@ -55,13 +54,45 @@ def _meta_vector(row: pd.Series) -> np.ndarray:
 
 
 def build_subjects(root: str) -> Tuple[List[Dict], Dict[str, List[Dict]]]:
+def _resolve_root(root: str) -> str:
+    # Handle layouts with "PKG - BraTS-PEDs-v1/BraTS-PEDs-v1"
+    candidates = [
+        root,
+        os.path.join(root, "PKG - BraTS-PEDs-v1", "BraTS-PEDs-v1"),
+        os.path.join(root, "BraTS-PEDs-v1"),
+    ]
+    for c in candidates:
+        if os.path.exists(os.path.join(c, "BraTS-PEDs_metadata.tsv")):
+            return c
+    return root
+
+
+def _subject_dirs(root: str) -> Dict[str, str]:
+    dirs = {}
+    for split in ["Training", "Validation", "Test"]:
+        split_dir = os.path.join(root, split)
+        if not os.path.isdir(split_dir):
+            continue
+        for name in os.listdir(split_dir):
+            path = os.path.join(split_dir, name)
+            if os.path.isdir(path) and name.startswith("BraTS-PED"):
+                dirs[name] = path
+    return dirs
+
+
+def build_subjects(root: str) -> Tuple[List[Dict], Dict[str, List[Dict]]]:
+    root = _resolve_root(root)
     meta_path = os.path.join(root, "BraTS-PEDs_metadata.tsv")
-    df = pd.read_csv(meta_path, sep="\\t")
+    df = pd.read_csv(meta_path, sep="\\t", engine="python")
+    subject_dirs = _subject_dirs(root)
 
     subjects = []
     for _, row in df.iterrows():
         sid = row["BraTS-SubjectID"]
-        files = _find_files_for_subject(root, sid)
+        subject_dir = subject_dirs.get(sid)
+        if subject_dir is None:
+            continue
+        files = _find_files_for_subject(subject_dir, sid)
         if not all(m in files for m in MODALITIES):
             continue
         if files.get("seg") is None:
@@ -119,6 +150,11 @@ def build_transforms(patch_size, spacing, is_train):
 
 def build_dataloaders(cfg):
     _, split = build_subjects(cfg["data"]["root"])
+    if not split["train"] and not split["val"] and not split["test"]:
+        raise ValueError(
+            "No subjects found. Ensure NIfTI files are extracted from zip archives "
+            "and that the root points to the folder containing BraTS-PEDs_metadata.tsv."
+        )
     patch_size = cfg["data"]["patch_size"]
     spacing = cfg["data"]["spacing"]
 
