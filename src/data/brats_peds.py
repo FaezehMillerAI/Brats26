@@ -55,19 +55,19 @@ def _meta_vector(row: pd.Series) -> np.ndarray:
 
 def _resolve_roots(root: str, data_root: str | None = None) -> Tuple[str, str]:
     # meta_root may differ from data_root in some releases
-    pkg_root = os.path.join(root, "PKG - BraTS-PEDs-v1", "BraTS-PEDs-v1")
+    pkg_root = os.path.join(root, "Brats", "PKG - BraTS-PEDs-v1", "BraTS-PEDs-v1")
     alt_root = os.path.join(root, "BraTS-PEDs-v1")
 
     meta_root = root
-    data_root = root
+    data_root = data_root or root
 
     if os.path.exists(os.path.join(root, "BraTS-PEDs_metadata.tsv")):
-        if os.path.isdir(pkg_root):
-            data_root = pkg_root
-        elif os.path.isdir(alt_root):
-            data_root = alt_root
-        if data_root is None:
-            data_root = root
+        # If caller provided data_root, keep it. Otherwise infer common layout.
+        if data_root == root:
+            if os.path.isdir(pkg_root):
+                data_root = pkg_root
+            elif os.path.isdir(alt_root):
+                data_root = alt_root
         return meta_root, data_root
 
     for c in [pkg_root, alt_root, root]:
@@ -254,8 +254,8 @@ def build_dataloaders(cfg):
     _, split = build_subjects(cfg["data"]["root"], data_root=data_root)
     if not split["train"] and not split["val"] and not split["test"]:
         raise ValueError(
-            "No subjects found. Ensure NIfTI files are extracted from zip archives "
-            "and that the root points to the folder containing BraTS-PEDs_metadata.tsv."
+            "No subjects found. Check that data_root points to the folder containing "
+            "Training/Validation, and that .nii.gz files exist under subject folders."
         )
     patch_size = cfg["data"]["patch_size"]
     spacing = cfg["data"]["spacing"]
