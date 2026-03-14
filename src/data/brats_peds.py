@@ -53,7 +53,6 @@ def _meta_vector(row: pd.Series) -> np.ndarray:
     return np.array([age, sex_val], dtype=np.float32)
 
 
-def build_subjects(root: str) -> Tuple[List[Dict], Dict[str, List[Dict]]]:
 def _resolve_root(root: str) -> str:
     # Handle layouts with "PKG - BraTS-PEDs-v1/BraTS-PEDs-v1"
     candidates = [
