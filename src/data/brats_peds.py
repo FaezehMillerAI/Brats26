@@ -86,7 +86,7 @@ def _subject_dirs(root: str) -> Dict[str, str]:
         for name in os.listdir(split_dir):
             path = os.path.join(split_dir, name)
             if os.path.isdir(path) and name.startswith("BraTS-PED"):
-                dirs[name] = path
+                dirs[name.strip()] = path
     if dirs:
         return dirs
 
@@ -96,22 +96,35 @@ def _subject_dirs(root: str) -> Dict[str, str]:
         base = os.path.basename(dirpath)
         m = sid_re.search(base)
         if m:
-            dirs[m.group(1)] = dirpath
+            dirs[m.group(1).strip()] = dirpath
             continue
         for fname in filenames:
             if not (fname.endswith(".nii") or fname.endswith(".nii.gz") or fname.endswith(".zip")):
                 continue
             m = sid_re.search(fname)
             if m:
-                dirs[m.group(1)] = dirpath
+                dirs[m.group(1).strip()] = dirpath
     if dirs:
         return dirs
 
     # Last resort: glob for subject folders anywhere under root
     for path in glob.glob(os.path.join(root, "**", "BraTS-PED-*-*"), recursive=True):
         if os.path.isdir(path):
-            dirs[os.path.basename(path)] = path
+            dirs[os.path.basename(path).strip()] = path
     return dirs
+
+
+def _subject_dirs_from_split_root(split_root: str) -> Dict[str, str]:
+    dirs: Dict[str, str] = {}
+    if not os.path.isdir(split_root):
+        return dirs
+    for name in os.listdir(split_root):
+        path = os.path.join(split_root, name)
+        if os.path.isdir(path) and name.startswith("BraTS-PED"):
+            dirs[name] = path
+    if dirs:
+        return dirs
+    return _subject_dirs(split_root)
 
 
 def _auto_unzip(root: str) -> None:
@@ -136,7 +149,14 @@ def build_subjects(root: str, data_root: str | None = None) -> Tuple[List[Dict],
     meta_root, data_root = _resolve_roots(root, data_root=data_root)
     meta_path = os.path.join(meta_root, "BraTS-PEDs_metadata.tsv")
     df = pd.read_csv(meta_path, sep="\\t", engine="python")
+    if "BraTS-SubjectID" in df.columns:
+        df["BraTS-SubjectID"] = df["BraTS-SubjectID"].astype(str).str.strip()
     subject_dirs = _subject_dirs(data_root)
+
+    # If data_root points directly to a split folder, support that.
+    split_name = os.path.basename(data_root)
+    if not subject_dirs and split_name in ["Training", "Validation", "Test"]:
+        subject_dirs = _subject_dirs_from_split_root(data_root)
     if not subject_dirs:
         _auto_unzip(data_root)
         subject_dirs = _subject_dirs(data_root)
