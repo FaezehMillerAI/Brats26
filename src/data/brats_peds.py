@@ -104,6 +104,13 @@ def _subject_dirs(root: str) -> Dict[str, str]:
             m = sid_re.search(fname)
             if m:
                 dirs[m.group(1)] = dirpath
+    if dirs:
+        return dirs
+
+    # Last resort: glob for subject folders anywhere under root
+    for path in glob.glob(os.path.join(root, "**", "BraTS-PED-*-*"), recursive=True):
+        if os.path.isdir(path):
+            dirs[os.path.basename(path)] = path
     return dirs
 
 
