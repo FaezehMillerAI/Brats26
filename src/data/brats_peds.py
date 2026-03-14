@@ -162,24 +162,50 @@ def build_subjects(root: str, data_root: str | None = None) -> Tuple[List[Dict],
         subject_dirs = _subject_dirs(data_root)
 
     subjects = []
-    for _, row in df.iterrows():
-        sid = row["BraTS-SubjectID"]
-        subject_dir = subject_dirs.get(sid)
-        if subject_dir is None:
-            continue
-        files = _find_files_for_subject(subject_dir, sid)
-        if not all(m in files for m in MODALITIES):
-            continue
-        if files.get("seg") is None:
-            continue
-        item = {
-            "subject_id": sid,
-            "image": [files[m] for m in MODALITIES],
-            "label": files.get("seg"),
-            "meta": _meta_vector(row),
-            "cohort": str(row.get("BraTS2025_cohort", "Training")),
-        }
-        subjects.append(item)
+    # Prefer building from available subject dirs to avoid missing files
+    if subject_dirs:
+        df_idx = df.set_index("BraTS-SubjectID")
+        for sid, subject_dir in subject_dirs.items():
+            files = _find_files_for_subject(subject_dir, sid)
+            if not all(m in files for m in MODALITIES):
+                continue
+            if files.get("seg") is None:
+                continue
+            row = df_idx.loc[sid] if sid in df_idx.index else None
+            cohort = "Training"
+            if "/validation/" in subject_dir.lower():
+                cohort = "Validation"
+            elif "/test/" in subject_dir.lower():
+                cohort = "Test"
+            if row is not None:
+                cohort = str(row.get("BraTS2025_cohort", cohort))
+            item = {
+                "subject_id": sid,
+                "image": [files[m] for m in MODALITIES],
+                "label": files.get("seg"),
+                "meta": _meta_vector(row) if row is not None else _meta_vector(pd.Series({})),
+                "cohort": cohort,
+            }
+            subjects.append(item)
+    else:
+        for _, row in df.iterrows():
+            sid = row["BraTS-SubjectID"]
+            subject_dir = subject_dirs.get(sid)
+            if subject_dir is None:
+                continue
+            files = _find_files_for_subject(subject_dir, sid)
+            if not all(m in files for m in MODALITIES):
+                continue
+            if files.get("seg") is None:
+                continue
+            item = {
+                "subject_id": sid,
+                "image": [files[m] for m in MODALITIES],
+                "label": files.get("seg"),
+                "meta": _meta_vector(row),
+                "cohort": str(row.get("BraTS2025_cohort", "Training")),
+            }
+            subjects.append(item)
 
     split = {"train": [], "val": [], "test": []}
     for item in subjects:
