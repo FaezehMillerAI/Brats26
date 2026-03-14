@@ -53,7 +53,7 @@ def _meta_vector(row: pd.Series) -> np.ndarray:
     return np.array([age, sex_val], dtype=np.float32)
 
 
-def _resolve_roots(root: str) -> Tuple[str, str]:
+def _resolve_roots(root: str, data_root: str | None = None) -> Tuple[str, str]:
     # meta_root may differ from data_root in some releases
     pkg_root = os.path.join(root, "PKG - BraTS-PEDs-v1", "BraTS-PEDs-v1")
     alt_root = os.path.join(root, "BraTS-PEDs-v1")
@@ -66,13 +66,15 @@ def _resolve_roots(root: str) -> Tuple[str, str]:
             data_root = pkg_root
         elif os.path.isdir(alt_root):
             data_root = alt_root
+        if data_root is None:
+            data_root = root
         return meta_root, data_root
 
     for c in [pkg_root, alt_root, root]:
         if os.path.exists(os.path.join(c, "BraTS-PEDs_metadata.tsv")):
             return c, c
 
-    return root, root
+    return root, data_root or root
 
 
 def _subject_dirs(root: str) -> Dict[str, str]:
@@ -123,8 +125,8 @@ def _auto_unzip(root: str) -> None:
                 continue
 
 
-def build_subjects(root: str) -> Tuple[List[Dict], Dict[str, List[Dict]]]:
-    meta_root, data_root = _resolve_roots(root)
+def build_subjects(root: str, data_root: str | None = None) -> Tuple[List[Dict], Dict[str, List[Dict]]]:
+    meta_root, data_root = _resolve_roots(root, data_root=data_root)
     meta_path = os.path.join(meta_root, "BraTS-PEDs_metadata.tsv")
     df = pd.read_csv(meta_path, sep="\\t", engine="python")
     subject_dirs = _subject_dirs(data_root)
@@ -195,7 +197,8 @@ def build_transforms(patch_size, spacing, is_train):
 
 
 def build_dataloaders(cfg):
-    _, split = build_subjects(cfg["data"]["root"])
+    data_root = cfg["data"].get("data_root")
+    _, split = build_subjects(cfg["data"]["root"], data_root=data_root)
     if not split["train"] and not split["val"] and not split["test"]:
         raise ValueError(
             "No subjects found. Ensure NIfTI files are extracted from zip archives "
