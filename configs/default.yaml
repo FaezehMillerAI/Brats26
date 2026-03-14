@@ -5,6 +5,7 @@ run:
 
 data:
   root: /content/drive/MyDrive/Brats
+  data_root: /content/drive/MyDrive/Brats/PKG - BraTS-PEDs-v1/BraTS-PEDs-v1
   batch_size: 1
   num_workers: 2
   patch_size: [128, 128, 128]
