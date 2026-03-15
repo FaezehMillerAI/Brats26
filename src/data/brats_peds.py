@@ -26,20 +26,29 @@ MODALITIES = ["t1n", "t1c", "t2w", "t2f"]
 
 
 def _find_files_for_subject(subject_dir: str, subject_id: str) -> Dict[str, str]:
-    # Prefer uncompressed .nii if present, otherwise fall back to .nii.gz
-    nii_files = glob.glob(os.path.join(subject_dir, "**", "*.nii"), recursive=True)
+    # Gather both .nii.gz and .nii so mixed folders still work.
+    nii_gz = glob.glob(os.path.join(subject_dir, "**", "*.nii.gz"), recursive=True)
+    nii = glob.glob(os.path.join(subject_dir, "**", "*.nii"), recursive=True)
+    nii_files = nii_gz + nii
     if not nii_files:
-        nii_files = glob.glob(os.path.join(subject_dir, "**", "*.nii.gz"), recursive=True)
-    if not nii_files:
-        nii_files = glob.glob(os.path.join(os.path.dirname(subject_dir), f"{subject_id}*.nii"))
-    if not nii_files:
-        nii_files = glob.glob(os.path.join(os.path.dirname(subject_dir), f"{subject_id}*.nii.gz"))
+        nii_gz = glob.glob(os.path.join(os.path.dirname(subject_dir), f"{subject_id}*.nii.gz"))
+        nii = glob.glob(os.path.join(os.path.dirname(subject_dir), f"{subject_id}*.nii"))
+        nii_files = nii_gz + nii
 
     mapping = {}
-    for path in nii_files:
+    # First pass: map .nii.gz
+    for path in nii_gz:
         lower = os.path.basename(path).lower()
         for mod in MODALITIES:
-            if re.search(rf"(_|-){mod}(\\.|_|-)", lower):
+            if re.search(rf"(_|-){mod}(\.|_|-)", lower):
+                mapping[mod] = path
+        if "seg" in lower or "label" in lower:
+            mapping["seg"] = path
+    # Second pass: overwrite with .nii if present
+    for path in nii:
+        lower = os.path.basename(path).lower()
+        for mod in MODALITIES:
+            if re.search(rf"(_|-){mod}(\.|_|-)", lower):
                 mapping[mod] = path
         if "seg" in lower or "label" in lower:
             mapping["seg"] = path
@@ -58,13 +67,26 @@ def _meta_vector(row: pd.Series) -> np.ndarray:
     return np.array([age, sex_val], dtype=np.float32)
 
 
+def _normalize_path(path: str) -> str:
+    return os.path.abspath(os.path.expanduser(path))
+
+
 def _resolve_roots(root: str, data_root: str | None = None) -> Tuple[str, str]:
     # meta_root may differ from data_root in some releases
+    root = _normalize_path(root)
+    if data_root is not None:
+        data_root = _normalize_path(data_root)
     pkg_root = os.path.join(root, "PKG - BraTS-PEDs-v1", "BraTS-PEDs-v1")
     alt_root = os.path.join(root, "BraTS-PEDs-v1")
 
     meta_root = root
     data_root = data_root or root
+
+    # If a relative data_root was passed, also try resolving against root.
+    if not os.path.exists(data_root) and data_root != root:
+        candidate = _normalize_path(os.path.join(root, data_root))
+        if os.path.exists(candidate):
+            data_root = candidate
 
     if os.path.exists(os.path.join(root, "BraTS-PEDs_metadata.tsv")):
         # If caller provided data_root, keep it. Otherwise infer common layout.
