@@ -154,6 +154,22 @@ def _subject_dirs_from_split_root(split_root: str) -> Dict[str, str]:
     return _subject_dirs(split_root)
 
 
+def _merge_sibling_splits(data_root: str, subject_dirs: Dict[str, str]) -> Dict[str, str]:
+    base = os.path.basename(data_root)
+    if base not in ["Training", "Validation", "Test"]:
+        return subject_dirs
+    parent = os.path.dirname(data_root)
+    for split in ["Training", "Validation", "Test"]:
+        split_dir = os.path.join(parent, split)
+        if not os.path.isdir(split_dir):
+            continue
+        for name in os.listdir(split_dir):
+            path = os.path.join(split_dir, name)
+            if os.path.isdir(path) and name.startswith("BraTS-PED"):
+                subject_dirs.setdefault(name.strip(), path)
+    return subject_dirs
+
+
 def _auto_unzip(root: str) -> None:
     import zipfile
 
@@ -184,6 +200,7 @@ def build_subjects(root: str, data_root: str | None = None) -> Tuple[List[Dict],
     split_name = os.path.basename(data_root)
     if not subject_dirs and split_name in ["Training", "Validation", "Test"]:
         subject_dirs = _subject_dirs_from_split_root(data_root)
+        subject_dirs = _merge_sibling_splits(data_root, subject_dirs)
     if not subject_dirs:
         _auto_unzip(data_root)
         subject_dirs = _subject_dirs(data_root)
