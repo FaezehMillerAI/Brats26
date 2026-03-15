@@ -225,7 +225,10 @@ def build_subjects(root: str, data_root: str | None = None) -> Tuple[List[Dict],
             elif "/test/" in sd_lower:
                 cohort = "Test"
             if row is not None:
-                cohort = str(row.get("BraTS2025_cohort", cohort))
+                cohort_from_tsv = str(row.get("BraTS2025_cohort", "")).strip()
+                cohort_lower = cohort_from_tsv.lower()
+                if "val" in cohort_lower or "test" in cohort_lower:
+                    cohort = cohort_from_tsv
             item = {
                 "subject_id": sid,
                 "image": [files[m] for m in MODALITIES],
