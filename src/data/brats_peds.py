@@ -1,6 +1,7 @@
 import glob
 import os
 import re
+import random
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -26,13 +27,16 @@ MODALITIES = ["t1n", "t1c", "t2w", "t2f"]
 
 
 def _find_files_for_subject(subject_dir: str, subject_id: str) -> Dict[str, str]:
-    # Gather both .nii.gz and .nii so mixed folders still work.
+    # Prefer .nii.gz to avoid partial or corrupted .nii files.
     nii_gz = glob.glob(os.path.join(subject_dir, "**", "*.nii.gz"), recursive=True)
-    nii = glob.glob(os.path.join(subject_dir, "**", "*.nii"), recursive=True)
+    nii = []
+    if not nii_gz:
+        nii = glob.glob(os.path.join(subject_dir, "**", "*.nii"), recursive=True)
     nii_files = nii_gz + nii
     if not nii_files:
         nii_gz = glob.glob(os.path.join(os.path.dirname(subject_dir), f"{subject_id}*.nii.gz"))
-        nii = glob.glob(os.path.join(os.path.dirname(subject_dir), f"{subject_id}*.nii"))
+        if not nii_gz:
+            nii = glob.glob(os.path.join(os.path.dirname(subject_dir), f"{subject_id}*.nii"))
         nii_files = nii_gz + nii
 
     mapping = {}
@@ -44,14 +48,15 @@ def _find_files_for_subject(subject_dir: str, subject_id: str) -> Dict[str, str]
                 mapping[mod] = path
         if "seg" in lower or "label" in lower:
             mapping["seg"] = path
-    # Second pass: overwrite with .nii if present
-    for path in nii:
-        lower = os.path.basename(path).lower()
-        for mod in MODALITIES:
-            if re.search(rf"(_|-){mod}(\.|_|-)", lower):
-                mapping[mod] = path
-        if "seg" in lower or "label" in lower:
-            mapping["seg"] = path
+    # Only use .nii if no .nii.gz were found.
+    if not nii_gz:
+        for path in nii:
+            lower = os.path.basename(path).lower()
+            for mod in MODALITIES:
+                if re.search(rf"(_|-){mod}(\.|_|-)", lower):
+                    mapping[mod] = path
+            if "seg" in lower or "label" in lower:
+                mapping["seg"] = path
 
     return mapping
 
@@ -302,6 +307,17 @@ def build_transforms(patch_size, spacing, is_train):
 def build_dataloaders(cfg):
     data_root = cfg["data"].get("data_root")
     _, split = build_subjects(cfg["data"]["root"], data_root=data_root)
+    # If no validation labels are available (common in some BraTS releases),
+    # create a small validation split from training.
+    if not split["val"] and split["train"]:
+        ratio = float(cfg["data"].get("val_split_ratio", 0.0))
+        if ratio > 0:
+            rng = random.Random(cfg["run"].get("seed", 42))
+            train_items = split["train"][:]
+            rng.shuffle(train_items)
+            n_val = max(1, int(len(train_items) * ratio))
+            split["val"] = train_items[:n_val]
+            split["train"] = train_items[n_val:]
     if not split["train"] and not split["val"] and not split["test"]:
         raise ValueError(
             "No subjects found. Check that data_root points to the folder containing "
