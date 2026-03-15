@@ -26,9 +26,14 @@ MODALITIES = ["t1n", "t1c", "t2w", "t2f"]
 
 
 def _find_files_for_subject(subject_dir: str, subject_id: str) -> Dict[str, str]:
-    nii_files = glob.glob(os.path.join(subject_dir, "**", "*.nii*"), recursive=True)
+    # Prefer uncompressed .nii if present, otherwise fall back to .nii.gz
+    nii_files = glob.glob(os.path.join(subject_dir, "**", "*.nii"), recursive=True)
     if not nii_files:
-        nii_files = glob.glob(os.path.join(os.path.dirname(subject_dir), f"{subject_id}*.nii*"))
+        nii_files = glob.glob(os.path.join(subject_dir, "**", "*.nii.gz"), recursive=True)
+    if not nii_files:
+        nii_files = glob.glob(os.path.join(os.path.dirname(subject_dir), f"{subject_id}*.nii"))
+    if not nii_files:
+        nii_files = glob.glob(os.path.join(os.path.dirname(subject_dir), f"{subject_id}*.nii.gz"))
 
     mapping = {}
     for path in nii_files:
@@ -55,7 +60,7 @@ def _meta_vector(row: pd.Series) -> np.ndarray:
 
 def _resolve_roots(root: str, data_root: str | None = None) -> Tuple[str, str]:
     # meta_root may differ from data_root in some releases
-    pkg_root = os.path.join(root, "Brats", "PKG - BraTS-PEDs-v1", "BraTS-PEDs-v1")
+    pkg_root = os.path.join(root, "PKG - BraTS-PEDs-v1", "BraTS-PEDs-v1")
     alt_root = os.path.join(root, "BraTS-PEDs-v1")
 
     meta_root = root
