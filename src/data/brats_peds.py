@@ -200,9 +200,12 @@ def build_subjects(root: str, data_root: str | None = None) -> Tuple[List[Dict],
                 continue
             row = df_idx.loc[sid] if sid in df_idx.index else None
             cohort = "Training"
-            if "/validation/" in subject_dir.lower():
+            sd_lower = subject_dir.lower().replace("\\\\", "/")
+            if "/validation/" in sd_lower:
                 cohort = "Validation"
-            elif "/test/" in subject_dir.lower():
+            elif "/training/" in sd_lower:
+                cohort = "Training"
+            elif "/test/" in sd_lower:
                 cohort = "Test"
             if row is not None:
                 cohort = str(row.get("BraTS2025_cohort", cohort))
